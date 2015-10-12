@@ -1,3 +1,4 @@
+fix matrix extraction according to pruned100 file before running 
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 #-------------------------------------------------------------------------------
@@ -11,7 +12,8 @@
 # Copyright:     (c) ITI (CERTH) 2013
 # Licence:       <apache licence 2.0>
 #-------------------------------------------------------------------------------
-import time, glob,os,pickle, igraph, numpy, itertools
+import time, glob,os,pickle, igraph, itertools
+import numpy as np
 
 print('extract termanalysis')
 print(time.asctime( time.localtime(time.time()) ))
@@ -45,7 +47,7 @@ edgeDict['terms'].sort()
 print('There are %s unique nodes globally' %len(edgeDict['terms']))
 
 yearList = []
-for filename in files:
+for filename in files[4:]:
     year = filename[-8:-4]
     yearList.append(year)
     print(year)
@@ -76,36 +78,37 @@ for filename in files:
         edgeDict[year]['term']['normPageRank'][x] = normPageRank[nodes.index(x)]
         edgeDict[year]['term']['degree'][x] = str(gDirected.degree(x))
 
-    with open('./data/newWatches_nodes_'+year+'.txt', 'w') as d:
-        d.write('Term\tFreq\tDegree\tPR\tNPR\n')
-        rankPgRank = sorted(edgeDict[year]['term']['pageRank'], key=edgeDict[year]['term']['pageRank'].get,reverse=True)
-        for at in rankPgRank:
-            try:
-                freq = edgeDict[year]['term']['Freq'][at]
-            except:
-                freq = str(0)
-                pass
-            tmpline = '\t'.join([at,freq,edgeDict[year]['term']['degree'][at],'{0:.6f}'.format(edgeDict[year]['term']['pageRank'][at]),'{0:.6f}'.format(edgeDict[year]['term']['normPageRank'][at])])
-            d.write(tmpline+'\n')
+    # '''write individual term analysis'''
+    # with open('./data/newWatches_nodes_'+year+'.txt', 'w') as d:
+    #     d.write('Term\tFreq\tDegree\tPR\tNPR\n')
+    #     rankPgRank = sorted(edgeDict[year]['term']['pageRank'], key=edgeDict[year]['term']['pageRank'].get,reverse=True)
+    #     for at in rankPgRank:
+    #         try:
+    #             freq = edgeDict[year]['term']['Freq'][at]
+    #         except:
+    #             freq = str(0)
+    #             pass
+    #         tmpline = '\t'.join([at,freq,edgeDict[year]['term']['degree'][at],'{0:.6f}'.format(edgeDict[year]['term']['pageRank'][at]),'{0:.6f}'.format(edgeDict[year]['term']['normPageRank'][at])])
+    #         d.write(tmpline+'\n')
 
-    '''write adjacency mat to file'''
+    '''creating adjacency mat'''
     print('creating adjacency matrix')
     adjMat = gDirected.get_adjacency(attribute='weight')
     del(gDirected)
-    adjMat = numpy.array(adjMat.data)
-    print('writing adjacency matrix to file')
-    with open('./data/adjacency_matrix_'+year+'.txt', 'w') as d:
-        d.write('Term\tAdjacency Matrix\n')
-        for idx,s in enumerate(nodes):
-            distLine = [str(x) for x in adjMat[idx].tolist()]
-            d.write(s+'\t'+'\t'.join(distLine)+'\n')
+    adjMat = np.array(adjMat.data)
+    # print('writing adjacency matrix to file')
+    # with open('./data/adjacency_matrix_'+year+'.txt', 'w') as d:
+    #     d.write('Term\tAdjacency Matrix\n')
+    #     for idx,s in enumerate(nodes):
+    #         distLine = [str(x) for x in adjMat[idx].tolist()]
+    #         d.write(s+'\t'+'\t'.join(distLine)+'\n')
 
     '''distance matrix extraction'''
     print('estimate distance matrix')
     from scipy import spatial
-    Y = spatial.distance.pdist(adjMat, 'euclidean')
-    Y = spatial.distance.squareform(Y)
-    Yuptri = numpy.triu(Y)
+    distMat = spatial.distance.pdist(adjMat, 'euclidean')
+    distMat = spatial.distance.squareform(distMat)
+    Yuptri = np.triu(distMat)
     del(adjMat)
 
     '''Write the distance matrix to a file'''
@@ -117,24 +120,24 @@ for filename in files:
             d.write(s+'\t'+'\t'.join(distLine)+'\n')
     del(Yuptri)
     
-    '''Write the (PR_userN * PR_userN+1)/distance matrix to a file'''
+    '''estimate the (PR_userN * PR_userN+1)/distance matrix'''
     print('estimate gravity')
-    gravMat = numpy.zeros(Y.shape)
+    gravMat = np.zeros(distMat.shape)
     for n,v in edgeDict[year]['term']['pageRank'].items():
         gravMat[nodes.index(n)] = v
-    pgrMat = numpy.zeros(Y.shape)
+    pgrMat = np.zeros(distMat.shape)
     for n,v in edgeDict[year]['term']['pageRank'].items():
         pgrMat[:,nodes.index(n)] = v
-    gravMat *= pgrMat
-    gravMat = -gravMat
-    gravMat *= abs(numpy.identity(gravMat.shape[0])-1)
-    gravMat/=(Y+1e-8)
+    gravMat = np.multiply(gravMat,pgrMat)
+    gravMat = (-gravMat*100000)
+    gravMat = np.multiply(gravMat,abs(np.identity(gravMat.shape[0])-1))
+    gravMat = np.divide(gravMat,(distMat+1))#e-8)
 
 
-    gravMatTriu = numpy.triu(gravMat)
-    # edgeDict[year]['distMat'] = Y
+    gravMatTriu = np.triu(gravMat)
+    # edgeDict[year]['distMat'] = distMat
     # edgeDict[year]['gravMat'] = gravMat
-    del(gravMat,Y)
+    del(gravMat,distMat)
     print('writing gravity matrix to file')
     with open('./data/similarities/gravity_matrix_'+year+'.txt', 'w') as d:
         d.write('Term\tGravity Matrix\n')
@@ -145,15 +148,15 @@ for filename in files:
     elapsed = time.time() - t
     print('Elapsed: %.2f seconds' % elapsed)
 
-'''write pagerank evolution of nodes'''
-print('write pagerank evolution of nodes')
-with open('./data/nodePageRankEvolution.txt', 'w') as d:
-    d.write('Term\t2006\t2007\t2008\t2009\t2010\t2011\t2012\n')
-    for x in nodes:
-        pgPerYearList = []
-        for y in yearList:
-            pgPerYearList.append('{0:.6f}'.format(edgeDict[y]['term']['pageRank'][x]))
-        d.write(x+'\t'+'\t'.join(pgPerYearList)+'\n')
+# '''write pagerank evolution of nodes'''
+# print('write pagerank evolution of nodes')
+# with open('./data/termPageRankEvolution.txt', 'w') as d:
+#     d.write('Term\t2006\t2007\t2008\t2009\t2010\t2011\t2012\n')
+#     for x in nodes:
+#         pgPerYearList = []
+#         for y in yearList:
+#             pgPerYearList.append(str(float(edgeDict[y]['term']['pageRank'][x])))
+#         d.write(x+'\t'+'\t'.join(pgPerYearList)+'\n')
 
 
 ##pickle.dump(edgeDict,open('./data/pickles/edgeDict.pck','wb'), protocol = 2)

@@ -98,14 +98,10 @@ def laplacianDistance(G):
     return laplacianSpace
 
 
-##adjList = [('Uni','Prof1',1), ('Uni', 'Prof2',1), ('Prof1','Stud1',1), ('Stud1','Uni',1), ('Prof2', 'Stud2',1), ('Stud2', 'Prof2',1)]
-##adjList = [('Uni','Prof1',1), ('Uni', 'Prof2',1), ('Prof1','Stud1',1), ('Stud1','Uni',1), ('Prof2', 'Stud2',1), ('Stud2', 'Prof2',1)]#,
-####            ('Maria','Dinos',2),('Dinos','Maria',3)]
-##gDirected=igraph.Graph.TupleList(adjList, directed = True, weights=True)
-####gDirected.add_vertex('Dinos')
-####gDirected.add_vertex('Maria')
-####gDirected.add_edge('Maria','Dinos')
-####gDirected.add_edge('Dinos','Maria')
+adjList = [('Uni','Prof1',1), ('Uni', 'Prof2',1), ('Prof1','Stud1',1), ('Stud1','Uni',1), ('Prof2', 'Stud2',1), ('Stud2', 'Prof2',1)]
+adjList = [('Uni','Prof1',1), ('Uni', 'Prof2',1), ('Prof1','Stud1',1), ('Stud1','Uni',1), ('Prof2', 'Stud2',1), ('Stud2', 'Prof2',1),('Maria','Dinos',2),('Dinos','Maria',3)]
+gDirected=igraph.Graph.TupleList(adjList, directed = True, weights=True)
+
 ##maxWeight = max([x[2] for x in adjList])
 ##adjList = [(a,b,c/maxWeight) for a,b,c in adjList]
 ##t2 = time.time()
@@ -168,23 +164,23 @@ def laplacianDistance(G):
 ##pprint.pprint(gDirected.similarity_jaccard())
 
 #--------------------------------------------------------------
-files = glob.glob('./data/watches_edges_*.txt')
-for filename in files:
-    year = filename[-8:-4]
-    with open(filename, 'r') as f:
-        users = []
-        t1 = time.time()
-        print(filename)
-##with open('./testfile.txt', 'r') as f:
-        adjList = []
-        next(f)
-        for line in f:
-            x = line.split('\t')
-            tripletuple = x[0].split(',')
-            users.extend(tripletuple)
-            tripletuple.append(int(x[1].strip()))
-            adjList.append(tripletuple)
-        print('There are %s edges and %s nodes' %(len(adjList),len(set(users))))
+##files = glob.glob('./data/watches_edges_*.txt')
+##for filename in files:
+##    year = filename[-8:-4]
+##    with open(filename, 'r') as f:
+##        users = []
+##        t1 = time.time()
+##        print(filename)
+####with open('./testfile.txt', 'r') as f:
+##        adjList = []
+##        next(f)
+##        for line in f:
+##            x = line.split('\t')
+##            tripletuple = x[0].split(',')
+##            users.extend(tripletuple)
+##            tripletuple.append(int(x[1].strip()))
+##            adjList.append(tripletuple)
+##        print('There are %s edges and %s nodes' %(len(adjList),len(set(users))))
 ##        maxWeight = sum([x[2] for x in adjList])
 ##        adjList = [(a,b,c/maxWeight) for a,b,c in adjList]
 ##        print('Extracted adjList')

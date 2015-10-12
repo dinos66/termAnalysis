@@ -1,3 +1,4 @@
+don't use unless corrected with pruned100
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 #-------------------------------------------------------------------------------
@@ -12,7 +13,12 @@
 # Copyright:     (c) ITI (CERTH) 2013
 # Licence:       <apache licence 2.0>
 #-------------------------------------------------------------------------------
-import time, glob,os,pickle, igraph, numpy, itertools, collections
+import time, glob,os,pickle, igraph, itertools, collections
+import matplotlib.pylab as plt
+import pandas as pd    
+from matplotlib import interactive
+import numpy as np
+from scipy.spatial import distance
 
 print('extract termanalysis pruned')
 print(time.asctime( time.localtime(time.time()) ))
@@ -64,13 +70,27 @@ for filename in files:
         gDirected.es['weight'] = 1
         gDirected.add_vertices(edgeDict['terms'])
         print('Full No of edges: %s' %len(edgeDict[year]['adjList']))
-        myEdges = [(x[0],x[1]) for x in edgeDict[year]['adjList'] if x[0] in edgeDict['terms'] and x[1] in edgeDict['terms']]
-        myWeights = [x[2] for x in edgeDict[year]['adjList'] if x[0] in edgeDict['terms'] and x[1] in edgeDict['terms']]    
+        myEdges,myWeights = [], []
+        for x in edgeDict[year]['adjList']:
+            if x[0] in edgeDict['terms'] and x[1] in edgeDict['terms']:
+                myEdges.append((x[0],x[1]))
+                myWeights.append(x[2])   
         print('Pruned No of edges %s' %len(myEdges))
+
+        '''Write pairs of users to txt file for Gephi'''  
+        print('writing gephi file')          
+        with open('./data/forGephi/prunedWatchesEdges_' + year +'.txt', 'w') as geph:
+            geph.write('Source,Target,Weight' + '\n')
+            for idg,edg in enumerate(myEdges):
+                towrite = list(edg)
+                towrite.append(str(myWeights[idg]))
+                geph.write(','.join(towrite) + '\n')
+        #-------------------
         gDirected.add_edges(myEdges)
         gDirected.es["weight"] = myWeights
         edgeDict[year]['graph'] = gDirected
         pass
+
     print('created graph')
     nodes = gDirected.vs['name']
     with open('./data/watches_nodes_'+year+'.txt', 'r') as f:
@@ -86,99 +106,144 @@ for filename in files:
     for x in nodes:
         edgeDict[year]['term']['pageRank'][x] = pageRank[nodes.index(x)]
         edgeDict[year]['term']['normPageRank'][x] = normPageRank[nodes.index(x)]
-        edgeDict[year]['term']['degree'][x] = str(gDirected.degree(x))
+        edgeDict[year]['term']['degree'][x] = gDirected.degree(x)
 
+    # pertick = 50
+    # topTermsNum = 1000
+    # degreeRankedTermsList = sorted(edgeDict[year]['term']['degree'], key = edgeDict[year]['term']['degree'].get,reverse=True)#[:topTermsNum]#[50:2050]
+    # degreeData = [edgeDict[year]['term']['degree'][x] for x in degreeRankedTermsList]
+
+    # '''writing term stats to file'''
     # with open('./data/pruned/watches_nodes_'+year+'.txt', 'w') as d:
-    #     d.write('Term\tFreq\tDegree\tPR\tNPR\n')
-    #     rankPgRank = sorted(edgeDict[year]['term']['pageRank'], key=edgeDict[year]['term']['pageRank'].get,reverse=True)
-    #     for at in rankPgRank:
-    #         try:
-    #             freq = edgeDict[year]['term']['Freq'][at]
-    #         except:
-    #             freq = str(0)
-    #             pass
-    #         tmpline = '\t'.join([at,freq,edgeDict[year]['term']['degree'][at],'{0:.6f}'.format(edgeDict[year]['term']['pageRank'][at]),'{0:.6f}'.format(edgeDict[year]['term']['normPageRank'][at])])
+    #     d.write('Term\tDegree\tPR\tNPR\n')
+    #     for at in nodes:
+    #         tmpline = '\t'.join([at,str(edgeDict[year]['term']['degree'][at]),'{0:.8f}'.format(edgeDict[year]['term']['pageRank'][at]),'{0:.8f}'.format(edgeDict[year]['term']['normPageRank'][at])])
     #         d.write(tmpline+'\n')
 
-    '''write adjacency mat to file'''
-    print('creating adjacency matrix')
-    adjMat = gDirected.get_adjacency(attribute='weight')
-    del(gDirected)
-    adjMat = numpy.array(adjMat.data)
-    # print('writing adjacency matrix to file')
-    # with open('./data/pruned/adjacency_matrix_'+year+'.txt', 'w') as d:
-    #     d.write('Term\tAdjacency Matrix\n')
-    #     for idx,s in enumerate(nodes):
-    #         distLine = [str(x) for x in adjMat[idx].tolist()]
+    # '''creating directed adjacency mat'''
+    # print('creating adjacency matrix')
+    # adjMat = gDirected.get_adjacency(attribute='weight')
+    # adjMat = np.array(adjMat.data)
+    # print('writing directed adjacency matrix to file')
+    # with open('./data/pruned/directedAdjacency_matrix_'+year+'.txt', 'w') as d:
+    #     d.write('Term\t'+'\t'.join(nodes)+'\n')
+    #     for s in nodes:
+    #         distLine = [str(x) for x in adjMat[nodes.index(s)].tolist()]
+    #         d.write(s+'\t'+'\t'.join(distLine)+'\n')
+    # del(adjMat)
+
+    # edgeDict[year]['directedAdjMat'] = adjMat
+
+    '''creating undirected adjacency mat'''
+    print('creating undirected adjacency matrix')
+    unDirected = gDirected.as_undirected(combine_edges='sum')
+    # del(gDirected)
+    undirectedAdjMat = np.array(unDirected.get_adjacency(attribute='weight').data)
+    del(unDirected)      
+    # print('writing undirected adjacency matrix to file')
+    # with open('./data/pruned/undirectedAdjacency_matrix_'+year+'.txt', 'w') as d:
+    #     d.write('Term\t'+'\t'.join(nodes)+'\n')
+    #     for s in nodes:
+    #         distLine = [str(x) for x in undirectedAdjMat[nodes.index(s)].tolist()]
     #         d.write(s+'\t'+'\t'.join(distLine)+'\n')
 
-    '''distance matrix extraction'''
-    print('estimate distance matrix')
+    edgeDict[year]['undirectedAdjMat'] = undirectedAdjMat
+
+    '''symmetrical distance matrix extraction'''
+    print('estimate symmetrical distance matrix')
     from scipy import spatial
-    Y = spatial.distance.pdist(adjMat, 'euclidean')
-    Y = spatial.distance.squareform(Y)
-    Yuptri = numpy.triu(Y)
-    del(adjMat)
+    distMat = spatial.distance.pdist(undirectedAdjMat, 'euclidean')
+    distMat = spatial.distance.squareform(distMat)
+    del(undirectedAdjMat)
+
+    # euclSpaceMapp(gDirected,distMat,nodes)#create euclidean space mapping images
 
     # '''Write the distance matrix to a file'''
     # print('writing distance matrix to file')
-    # with open('./data/pruned/similarities/distance_matrix_'+year+'.txt', 'w') as d:
-    #     d.write('Term\tEuclidean Distance Matrix\n')
-    #     for idx,s in enumerate(nodes):
-    #         distLine = [str(round(x,2)) for x in Yuptri[idx].tolist()]
+    # with open('./data/pruned/distance_matrix_'+year+'.txt', 'w') as d:
+    #     d.write('Term\t'+'\t'.join(nodes)+'\n')
+    #     for s in nodes:
+    #         distLine = [str(float(x)) for x in distMat[nodes.index(s)].tolist()]
     #         d.write(s+'\t'+'\t'.join(distLine)+'\n')
-    del(Yuptri)
+
+    # np.savez_compressed('./data/pruned/distance_matrix_'+year+'.npz',distMat=distMat)
     
-    '''Write the (PR_userN * PR_userN+1)/distance matrix to a file'''
+    '''estimate the (PR_userN * PR_userN+1)/distance matrix'''
+    normMethod = 'SUM'#normalization method of distance matrix
+    if normMethod == 'MAX':
+        PRversion = 'normPageRank'
+    elif normMethod == 'SUM':
+        PRversion = 'pageRank'
     print('estimate gravity')
-    gravMat = numpy.zeros(Y.shape)
-    for n,v in edgeDict[year]['term']['normPageRank'].items():
+    gravMat = np.zeros(distMat.shape)
+    for n,v in edgeDict[year]['term'][PRversion].items():
         gravMat[nodes.index(n)] = v
-    pgrMat = numpy.zeros(Y.shape)
-    for n,v in edgeDict[year]['term']['normPageRank'].items():
+    pgrMat = np.zeros(distMat.shape)
+    for n,v in edgeDict[year]['term'][PRversion].items():
         pgrMat[:,nodes.index(n)] = v
-    gravMat *= pgrMat
-    gravMat = (-gravMat*100)
-    gravMat *= abs(numpy.identity(gravMat.shape[0])-1)
-    gravMat/=(Y+1)#e-8)
+    gravMat = np.multiply(gravMat,pgrMat)
+    PRprodArray = gravMat.reshape(-1)
+    gravMat = (-gravMat)#*1000)
+    distMat = (distMat+1)/distMat.sum()#make sure this complies with the normMethod
+    # gravMat = np.divide(gravMat,distMat)#e-8)
+    # gravMat = np.multiply(gravMat,abs(np.identity(gravMat.shape[0])-1))    
+    
+    '''estimate and write the gravitational potential associated with mass distribution'''
+    print('estimate and write the gravitational potential associated with mass distribution')
+    with open('./data/pruned/mass_distr_grav_potential_'+normMethod+'normed_'+year+'.txt', 'w') as d:
+        d.write('term\tpotential associated with a mass distribution\n') 
+        for s in nodes:
+            pmd = 0
+            for i in nodes:
+                pmd += -edgeDict[year]['term'][PRversion][i]/distMat[nodes.index(s)][nodes.index(i)]
+            d.write(s+'\t'+str(float(pmd))+'\n')
 
+    # print('Max grav is %s and min grav is %s' %(gravMat.max(),gravMat.min()))
+    # print('Max distance is %s and min distance is %s' %(distMat.max(),distMat.min()))
+    # del(distMat)
+    # print('writing gravity matrix to file')
+    # with open('./data/pruned/gravity_matrix_'+normMethod+'normed_'+year+'.txt', 'w') as d:
+    #     d.write('Term\t'+'\t'.join(nodes)+'\n')
+    #     for s in nodes:
+    #         distLine = [str(float(x)).replace('.',',') for x in gravMat[nodes.index(s)].tolist()]
+    #         d.write(s+'\t'+'\t'.join(distLine)+'\n')
 
-    gravMatTriu = numpy.triu(gravMat)
-    # edgeDict[year]['distMat'] = Y
-    # edgeDict[year]['gravMat'] = gravMat
-    del(gravMat,Y)
-    print('writing gravity matrix to file')
-    with open('./data/pruned2/similarities/gravity_matrix_'+year+'.txt', 'w') as d:
-        d.write('Term\tGravity Matrix\n')
-        for idx,s in enumerate(nodes):
-            # if 0.00000000103
-            distLine = [str(round(x,6)).replace('.',',') for x in gravMatTriu[idx].tolist()]
-            d.write(s+'\t'+'\t'.join(distLine)+'\n')
-
-##    print('write grav mat to excel')
-##    import xlsxwriter
-##    # Create an new Excel file and add a worksheet.
-##    workbook = xlsxwriter.Workbook('./data/pruned2/similarities/gravity_matrix_'+year+'xlsx')
-##    worksheet = workbook.add_worksheet()
-##    for 
-##        worksheet.write(2, 0, 123)
-##
-##    workbook.close()
+    # np.savez_compressed('./data/pruned/gravity_matrix_'+normMethod+'normed_'+year+'.npz',gravMat=gravMat)
 
     elapsed = time.time() - t
     print('Elapsed: %.2f seconds' % elapsed)
 
 # '''write pagerank evolution of nodes'''
 # print('write pagerank evolution of nodes')
-# with open('./data/pruned/nodePageRankEvolution.txt', 'w') as d:
+# with open('./data/pruned/termPageRankEvolution.txt', 'w') as d:
 #     d.write('Term\t2006\t2007\t2008\t2009\t2010\t2011\t2012\n')
 #     for x in nodes:
 #         pgPerYearList = []
 #         for y in yearList:
-#             pgPerYearList.append('{0:.6f}'.format(edgeDict[y]['term']['pageRank'][x]))
+#             pgPerYearList.append(str(float(edgeDict[y]['term']['pageRank'][x])))
 #         d.write(x+'\t'+'\t'.join(pgPerYearList)+'\n')
 
+# '''compute displacement, velocity and acceleration of terms'''
+# termKinetics = {x:{'displacement':[],'velocity':[],'accel':[]} for x in nodes}
+# for s in nodes:
+#     for y in yearList[1:]:
+#         termKinetics[s]['displacement'].append(distance.euclidean(edgeDict[y]['undirectedAdjMat'][nodes.index(s)],edgeDict[str(int(y)-1)]['undirectedAdjMat'][nodes.index(s)]))
+#     termKinetics[s]['velocity'] = np.diff(termKinetics[s]['displacement'])
+#     termKinetics[s]['accel'] = np.diff(termKinetics[s]['velocity'])
+# '''write kinetics of terms'''
+# print('write kinetics of terms')
+# with open('./data/pruned/term_displacement.txt', 'w') as d:
+#     d.write('Term\t2007\t2008\t2009\t2010\t2011\t2012\n')
+#     with open('./data/pruned/term_velocity.txt', 'w') as v:
+#         with open('./data/pruned/term_acceleration.txt', 'w') as a:
+#             for s in nodes:
+#                 displLine = [str(float(x)) for x in termKinetics[s]['displacement']]
+#                 velLine = [str(float(x)) for x in termKinetics[s]['velocity'].tolist()]
+#                 accLine = [str(float(x)) for x in termKinetics[s]['accel'].tolist()]
+#                 d.write(s+'\t'+'\t'.join(displLine)+'\n')
+#                 v.write(s+'\t'+'\t'.join(velLine)+'\n')
+#                 a.write(s+'\t'+'\t'.join(accLine)+'\n')
 
-pickle.dump(edgeDict,open('./data/pruned/pickles/edgeDictPruned.pck','wb'), protocol = 2)
+# pickle.dump(edgeDict,open('./data/pruned/pickles/edgeDictPruned.pck','wb'), protocol = 2)
 elapsed = time.time() - t
 print('Total time Elapsed: %.2f seconds' % elapsed)
